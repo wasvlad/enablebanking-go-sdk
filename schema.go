@@ -1,4 +1,4 @@
-package schemas
+package enablebankinggosdk
 
 type BalanceResource struct {
 	Name                    string        `json:"name"`
