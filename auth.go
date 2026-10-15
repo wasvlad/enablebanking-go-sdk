@@ -92,10 +92,17 @@ func (generator jwtGenerator) generate() (string, error) {
 
 type access struct {
 	/*
-		List of accounts access to which is requested. If not set behaviour depends on the
-		bank: some banks allow users to choose list of accessible accounts through their
-		access consent UI, while other may provide access to all accounts or just access to
-		the list of accounts.
+		This parameter specifies the date and time until which the authorised session
+		remains valid. The value must be in the RFC3339 date-time format with a timezone
+		offset, e.g. 2025-12-01T12:00:00.000000+00:00. The provided value cannot exceed
+		the date and time, calculated as "now" + maximum_consent_validity (provided in
+		seconds for each ASPSP in response to the GET /aspsps request). The provided value
+		is subject to adjustment to comply with the ASPSP's requirements. Specifically, if
+		the provided value is less than the minimum consent validity allowed by the ASPSP
+		(e.g., some ASPSPs require a minimum of 1 hour or 1 day), the consent validity will
+		be adjusted to meet these requirements. However, the session validity will remain
+		exactly as specified. This means that even if the consent remains valid on the
+		ASPSP's side, the session will expire based on the initially provided value.
 	*/
 	ValidUntil string `json:"valid_until"`
 }
