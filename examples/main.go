@@ -44,7 +44,6 @@ func main() {
 		panic(err)
 	}
 	defer response.Body.Close()
-	fmt.Println("end")
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		panic(err)
