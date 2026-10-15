@@ -14,10 +14,10 @@ func main() {
 		panic("Usage: " + os.Args[0] + " path_to_private_key issuer kid")
 	}
 	generator, err := ebSDK.NewJWTGenerator(
-		os.Args[1],
-		os.Args[2],
-		60*60,
-		os.Args[3],
+		os.Args[1], // path
+		os.Args[2], // issuer
+		60*60,      // 1 hour
+		os.Args[3], // kid
 	)
 	if err != nil {
 		panic(err)
@@ -43,6 +43,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer response.Body.Close()
 	fmt.Println("end")
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
