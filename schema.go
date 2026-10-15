@@ -1,4 +1,4 @@
-package enablebankinggosdk
+package eb
 
 type BalanceResource struct {
 	Name                    string        `json:"name"`
