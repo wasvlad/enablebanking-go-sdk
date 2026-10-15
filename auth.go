@@ -1,4 +1,4 @@
-package ebSDK
+package eb
 
 import (
 	"bytes"
