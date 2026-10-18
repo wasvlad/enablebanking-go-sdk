@@ -1,10 +1,8 @@
 package eb
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -133,25 +131,11 @@ type StartAuthorizationRequest struct {
 }
 
 func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
-	jsonBytes, err := json.Marshal(data)
-	buf := bytes.NewBuffer(jsonBytes)
+	r := ebClient.httpClient.R().bearerAuthorization(ebClient.jwtToken)
+	r, err := r.jsonBody(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %v", err)
+		return nil, fmt.Errorf("error creating json body: %v", err)
 	}
-	request, err := http.NewRequest(
-		"POST",
-		apiURL+"/auth",
-		buf,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
-	}
-	request.Header.Set("Authorization", "Bearer "+ebClient.jwtToken)
-	request.Header.Set("Content-Type", "application/json")
-	resp, err := ebClient.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed executing request: %v", err)
-	}
-
+	resp, err := r.post(apiURL + "/auth")
 	return resp, nil
 }
