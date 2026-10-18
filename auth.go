@@ -137,5 +137,8 @@ func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Respon
 		return nil, fmt.Errorf("error creating json body: %v", err)
 	}
 	resp, err := r.post(apiURL + "/auth")
+	if err != nil {
+		return nil, fmt.Errorf("error making requst: %v", err)
+	}
 	return resp, nil
 }
