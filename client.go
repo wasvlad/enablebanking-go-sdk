@@ -12,7 +12,7 @@ const apiURL string = "https://api.enablebanking.com"
 func NewEBClient(jwtGenerator *jwtGenerator) (*EBClient, error) {
 	err := jwtGenerator.generate()
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate jwt token: %v", err)
+		return nil, fmt.Errorf("unable to generate jwt token: %w", err)
 	}
 
 	ebClient := EBClient{

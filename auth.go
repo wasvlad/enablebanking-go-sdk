@@ -38,7 +38,7 @@ type jwtGenerator struct {
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	keyContent, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read key from disk: %v", err)
+		return nil, fmt.Errorf("failed to read key from disk: %w", err)
 	}
 	block, _ := pem.Decode(keyContent)
 	if block == nil {
@@ -117,7 +117,7 @@ func (gen *jwtGenerator) getToken() (string, error) {
 		err = gen.generate()
 	}
 	if err != nil {
-		return "", fmt.Errorf("unable to generate token: %v", err)
+		return "", fmt.Errorf("unable to generate token: %w", err)
 	}
 	return gen.token.token, nil
 }
@@ -172,11 +172,11 @@ func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Respon
 	r := ebClient.httpClient.R().bearerAuthorization(token)
 	r, err = r.jsonBody(data)
 	if err != nil {
-		return nil, fmt.Errorf("error creating json body: %v", err)
+		return nil, fmt.Errorf("error creating json body: %w", err)
 	}
 	resp, err := r.post(apiURL + "/auth")
 	if err != nil {
-		return nil, fmt.Errorf("error making requst: %v", err)
+		return nil, fmt.Errorf("error making requst: %w", err)
 	}
 	return resp, nil
 }
