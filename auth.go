@@ -14,11 +14,25 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type jwtToken struct {
+	token      string
+	validUntil int64
+}
+
+func (token *jwtToken) isValid(tolerance int64) bool {
+	iat := time.Now().Unix()
+	if token.validUntil-iat < tolerance {
+		return false
+	}
+	return true
+}
+
 type jwtGenerator struct {
 	key      *rsa.PrivateKey
 	issuer   string
 	validFor int64
 	kid      string
+	token    jwtToken
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -53,21 +67,27 @@ func NewJWTGenerator(path string, issuer string, validFor int64, kid string) (*j
 	if err != nil {
 		return nil, err
 	}
+	token := jwtToken{
+		token:      "",
+		validUntil: time.Now().Unix() - 1,
+	}
 	return &jwtGenerator{
 		key:      key,
 		issuer:   issuer,
 		validFor: validFor,
 		kid:      kid,
+		token:    token,
 	}, nil
 }
 
-func (generator jwtGenerator) generate() (string, error) {
+func (generator *jwtGenerator) generate() error {
 	iat := time.Now().UTC().Unix()
+	exp := iat + generator.validFor
 	claims := jwt.MapClaims{
 		"iss": generator.issuer,
 		"aud": strings.Split(apiURL, "//")[1],
 		"iat": iat,
-		"exp": iat + generator.validFor,
+		"exp": exp,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -82,10 +102,24 @@ func (generator jwtGenerator) generate() (string, error) {
 	signed_token, err := token.SignedString(generator.key)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return signed_token, nil
+	generator.token.token = signed_token
+	generator.token.validUntil = exp
+
+	return nil
+}
+
+func (gen *jwtGenerator) getToken() (string, error) {
+	var err error = nil
+	if !gen.token.isValid(10) {
+		err = gen.generate()
+	}
+	if err != nil {
+		return "", fmt.Errorf("unable to generate token: %v", err)
+	}
+	return gen.token.token, nil
 }
 
 type access struct {
@@ -131,8 +165,12 @@ type StartAuthorizationRequest struct {
 }
 
 func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
-	r := ebClient.httpClient.R().bearerAuthorization(ebClient.jwtToken)
-	r, err := r.jsonBody(data)
+	token, err := ebClient.JWTGenerator.getToken()
+	if err != nil {
+		return nil, err
+	}
+	r := ebClient.httpClient.R().bearerAuthorization(token)
+	r, err = r.jsonBody(data)
 	if err != nil {
 		return nil, fmt.Errorf("error creating json body: %v", err)
 	}

@@ -1,21 +1,21 @@
 package eb
 
+import "fmt"
+
 type EBClient struct {
-	jwtToken     string
-	JWTGenerator jwtGenerator
+	JWTGenerator *jwtGenerator
 	httpClient   httpClient
 }
 
 const apiURL string = "https://api.enablebanking.com"
 
-func NewEBClient(jwtGenerator jwtGenerator) (*EBClient, error) {
-	jwtToken, err := jwtGenerator.generate()
+func NewEBClient(jwtGenerator *jwtGenerator) (*EBClient, error) {
+	err := jwtGenerator.generate()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to generate jwt token: %v", err)
 	}
 
 	ebClient := EBClient{
-		jwtToken:     jwtToken,
 		JWTGenerator: jwtGenerator,
 		httpClient:   newHttpClient(),
 	}

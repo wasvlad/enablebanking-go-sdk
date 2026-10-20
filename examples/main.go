@@ -23,7 +23,7 @@ func main() {
 		panic(err)
 	}
 	client, err := ebSDK.NewEBClient(
-		*generator,
+		generator,
 	)
 	if err != nil {
 		panic(err)

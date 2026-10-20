@@ -16,7 +16,7 @@ func newHttpClient() httpClient {
 	}
 }
 
-func (hc httpClient) R() request {
+func (hc *httpClient) R() *request {
 	return newRequest(&hc.httpClient)
 }
 
@@ -27,19 +27,19 @@ type request struct {
 	jsonBuf *bytes.Buffer
 }
 
-func newRequest(hc *http.Client) request {
-	return request{
+func newRequest(hc *http.Client) *request {
+	return &request{
 		client:  hc,
 		headers: map[string]string{},
 	}
 }
 
-func (req request) bearerAuthorization(token string) *request {
+func (req *request) bearerAuthorization(token string) *request {
 	req.headers["Authorization"] = "Bearer " + token
-	return &req
+	return req
 }
 
-func (req request) jsonBody(data any) (*request, error) {
+func (req *request) jsonBody(data any) (*request, error) {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -47,10 +47,10 @@ func (req request) jsonBody(data any) (*request, error) {
 	buf := bytes.NewBuffer(jsonBytes)
 	req.jsonBuf = buf
 	req.headers["Content-Type"] = "application/json"
-	return &req, nil
+	return req, nil
 }
 
-func (req request) post(url string) (*http.Response, error) {
+func (req *request) post(url string) (*http.Response, error) {
 	request, err := http.NewRequest(
 		"POST",
 		url,
