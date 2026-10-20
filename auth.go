@@ -164,7 +164,7 @@ type StartAuthorizationRequest struct {
 	RedirectUrl string `json:"redirect_url"`
 }
 
-func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
+func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
 	token, err := ebClient.JWTGenerator.getToken()
 	if err != nil {
 		return nil, err
