@@ -42,7 +42,7 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(keyContent)
 	if block == nil {
-		return nil, errors.New("No PEM data found in file")
+		return nil, errors.New("no PEM data found in file")
 	}
 	switch block.Type {
 	case "RSA PRIVATE KEY":
@@ -58,7 +58,7 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		}
 		return privateKey.(*rsa.PrivateKey), nil
 	default:
-		return nil, errors.New("Unsupported type of private key")
+		return nil, errors.New("unsupported type of private key")
 	}
 }
 
@@ -99,13 +99,13 @@ func (generator *jwtGenerator) generate() error {
 	token.Header["typ"] = "JWT"
 	token.Header["alg"] = "RS256"
 
-	signed_token, err := token.SignedString(generator.key)
+	signedToken, err := token.SignedString(generator.key)
 
 	if err != nil {
 		return err
 	}
 
-	generator.token.token = signed_token
+	generator.token.token = signedToken
 	generator.token.validUntil = exp
 
 	return nil
