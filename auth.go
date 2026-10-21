@@ -19,9 +19,12 @@ type jwtToken struct {
 	validUntil int64
 }
 
-func (token *jwtToken) isValid(tolerance int64) bool {
+func (token *jwtToken) isValid(tolerance uint64) bool {
 	iat := time.Now().Unix()
-	if token.validUntil-iat < tolerance {
+	if token.validUntil-iat < 0 {
+		return false
+	}
+	if uint64(token.validUntil-iat) < tolerance {
 		return false
 	}
 	return true
@@ -31,16 +34,17 @@ func (token *jwtToken) isValid(tolerance int64) bool {
 func newJWTToken() *jwtToken {
 	return &jwtToken{
 		token:      "",
-		validUntil: time.Now().Unix(),
+		validUntil: time.Now().Unix() - 1,
 	}
 }
 
 type jwtSession struct {
-	key      *rsa.PrivateKey
-	issuer   string
-	validFor int64
-	kid      string
-	token    *jwtToken
+	key                *rsa.PrivateKey
+	issuer             string
+	validFor           int64
+	kid                string
+	token              *jwtToken
+	tokenRefreshBuffer uint64
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -77,16 +81,21 @@ func NewJWTSession(path string, issuer string, validFor int64, kid string) (*jwt
 	}
 	token := newJWTToken()
 	return &jwtSession{
-		key:      key,
-		issuer:   issuer,
-		validFor: validFor,
-		kid:      kid,
-		token:    token,
+		key:                key,
+		issuer:             issuer,
+		validFor:           validFor,
+		kid:                kid,
+		token:              token,
+		tokenRefreshBuffer: 10, // How many seconds before expiration jwt token is refreshed
 	}, nil
 }
 
+func (session *jwtSession) SetRefreshBuffer(seconds uint64) {
+	session.tokenRefreshBuffer = seconds
+}
+
 func (session *jwtSession) refresh() error {
-	iat := time.Now().UTC().Unix()
+	iat := time.Now().Unix()
 	exp := iat + session.validFor
 	claims := jwt.MapClaims{
 		"iss": session.issuer,
@@ -118,7 +127,7 @@ func (session *jwtSession) refresh() error {
 
 func (session *jwtSession) getToken() (string, error) {
 	var err error = nil
-	if !session.token.isValid(10) {
+	if !session.token.isValid(session.tokenRefreshBuffer) {
 		err = session.refresh()
 	}
 	if err != nil {
