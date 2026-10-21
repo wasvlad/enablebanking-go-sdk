@@ -126,11 +126,10 @@ func (session *jwtSession) refresh() error {
 }
 
 func (session *jwtSession) getToken() (string, error) {
-	var err error = nil
 	if !session.token.isValid(session.tokenRefreshBuffer) {
-		err = session.refresh()
+		return session.token.token, nil
 	}
-	if err != nil {
+	if err := session.refresh(); err != nil {
 		return "", fmt.Errorf("unable to generate token: %w", err)
 	}
 	return session.token.token, nil
