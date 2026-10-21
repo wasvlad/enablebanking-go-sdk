@@ -27,12 +27,20 @@ func (token *jwtToken) isValid(tolerance int64) bool {
 	return true
 }
 
-type jwtGenerator struct {
+// Creates empty, not valid jwt token
+func newJWTToken() *jwtToken {
+	return &jwtToken{
+		token:      "",
+		validUntil: time.Now().Unix(),
+	}
+}
+
+type jwtSession struct {
 	key      *rsa.PrivateKey
 	issuer   string
 	validFor int64
 	kid      string
-	token    jwtToken
+	token    *jwtToken
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -62,16 +70,13 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 }
 
-func NewJWTGenerator(path string, issuer string, validFor int64, kid string) (*jwtGenerator, error) {
+func NewJWTSession(path string, issuer string, validFor int64, kid string) (*jwtSession, error) {
 	key, err := loadPrivateKey(path)
 	if err != nil {
 		return nil, err
 	}
-	token := jwtToken{
-		token:      "",
-		validUntil: time.Now().Unix() - 1,
-	}
-	return &jwtGenerator{
+	token := newJWTToken()
+	return &jwtSession{
 		key:      key,
 		issuer:   issuer,
 		validFor: validFor,
@@ -80,11 +85,11 @@ func NewJWTGenerator(path string, issuer string, validFor int64, kid string) (*j
 	}, nil
 }
 
-func (generator *jwtGenerator) generate() error {
+func (session *jwtSession) refresh() error {
 	iat := time.Now().UTC().Unix()
-	exp := iat + generator.validFor
+	exp := iat + session.validFor
 	claims := jwt.MapClaims{
-		"iss": generator.issuer,
+		"iss": session.issuer,
 		"aud": strings.Split(apiURL, "//")[1],
 		"iat": iat,
 		"exp": exp,
@@ -95,31 +100,31 @@ func (generator *jwtGenerator) generate() error {
 		token.Header = make(map[string]interface{})
 	}
 
-	token.Header["kid"] = generator.kid
+	token.Header["kid"] = session.kid
 	token.Header["typ"] = "JWT"
 	token.Header["alg"] = "RS256"
 
-	signedToken, err := token.SignedString(generator.key)
+	signedToken, err := token.SignedString(session.key)
 
 	if err != nil {
 		return err
 	}
 
-	generator.token.token = signedToken
-	generator.token.validUntil = exp
+	session.token.token = signedToken
+	session.token.validUntil = exp
 
 	return nil
 }
 
-func (gen *jwtGenerator) getToken() (string, error) {
+func (session *jwtSession) getToken() (string, error) {
 	var err error = nil
-	if !gen.token.isValid(10) {
-		err = gen.generate()
+	if !session.token.isValid(10) {
+		err = session.refresh()
 	}
 	if err != nil {
 		return "", fmt.Errorf("unable to generate token: %w", err)
 	}
-	return gen.token.token, nil
+	return session.token.token, nil
 }
 
 type access struct {
@@ -165,7 +170,7 @@ type StartAuthorizationRequest struct {
 }
 
 func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
-	token, err := ebClient.JWTGenerator.getToken()
+	token, err := ebClient.jwtSession.getToken()
 	if err != nil {
 		return nil, err
 	}

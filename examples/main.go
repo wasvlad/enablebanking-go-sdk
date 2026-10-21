@@ -13,7 +13,7 @@ func main() {
 	if len(os.Args) < 4 {
 		panic("Usage: " + os.Args[0] + " path_to_private_key issuer kid")
 	}
-	generator, err := eb.NewJWTGenerator(
+	generator, err := eb.NewJWTSession(
 		os.Args[1], // path
 		os.Args[2], // issuer
 		60*60,      // 1 hour
