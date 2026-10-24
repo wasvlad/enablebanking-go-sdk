@@ -14,21 +14,47 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type jwtGenerator struct {
-	key      *rsa.PrivateKey
-	issuer   string
-	validFor int64
-	kid      string
+type jwtToken struct {
+	token      string
+	validUntil int64
+}
+
+func (token *jwtToken) isValid(tolerance uint64) bool {
+	iat := time.Now().Unix()
+	if token.validUntil-iat < 0 {
+		return false
+	}
+	if uint64(token.validUntil-iat) < tolerance {
+		return false
+	}
+	return true
+}
+
+// Creates empty, not valid jwt token
+func newJWTToken() *jwtToken {
+	return &jwtToken{
+		token:      "",
+		validUntil: time.Now().Unix() - 1,
+	}
+}
+
+type jwtSession struct {
+	key                *rsa.PrivateKey
+	issuer             string
+	validFor           int64
+	kid                string
+	token              *jwtToken
+	tokenRefreshBuffer uint64
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	keyContent, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read key from disk: %v", err)
+		return nil, fmt.Errorf("failed to read key from disk: %w", err)
 	}
 	block, _ := pem.Decode(keyContent)
 	if block == nil {
-		return nil, errors.New("No PEM data found in file")
+		return nil, errors.New("no PEM data found in file")
 	}
 	switch block.Type {
 	case "RSA PRIVATE KEY":
@@ -44,30 +70,38 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		}
 		return privateKey.(*rsa.PrivateKey), nil
 	default:
-		return nil, errors.New("Unsupported type of private key")
+		return nil, errors.New("unsupported type of private key")
 	}
 }
 
-func NewJWTGenerator(path string, issuer string, validFor int64, kid string) (*jwtGenerator, error) {
+func NewJWTSession(path string, issuer string, validFor int64, kid string) (*jwtSession, error) {
 	key, err := loadPrivateKey(path)
 	if err != nil {
 		return nil, err
 	}
-	return &jwtGenerator{
-		key:      key,
-		issuer:   issuer,
-		validFor: validFor,
-		kid:      kid,
+	token := newJWTToken()
+	return &jwtSession{
+		key:                key,
+		issuer:             issuer,
+		validFor:           validFor,
+		kid:                kid,
+		token:              token,
+		tokenRefreshBuffer: 10, // How many seconds before expiration jwt token is refreshed
 	}, nil
 }
 
-func (generator jwtGenerator) generate() (string, error) {
-	iat := time.Now().UTC().Unix()
+func (session *jwtSession) SetRefreshBuffer(seconds uint64) {
+	session.tokenRefreshBuffer = seconds
+}
+
+func (session *jwtSession) refresh() error {
+	iat := time.Now().Unix()
+	exp := iat + session.validFor
 	claims := jwt.MapClaims{
-		"iss": generator.issuer,
+		"iss": session.issuer,
 		"aud": strings.Split(apiURL, "//")[1],
 		"iat": iat,
-		"exp": iat + generator.validFor,
+		"exp": exp,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -75,17 +109,30 @@ func (generator jwtGenerator) generate() (string, error) {
 		token.Header = make(map[string]interface{})
 	}
 
-	token.Header["kid"] = generator.kid
+	token.Header["kid"] = session.kid
 	token.Header["typ"] = "JWT"
 	token.Header["alg"] = "RS256"
 
-	signed_token, err := token.SignedString(generator.key)
+	signedToken, err := token.SignedString(session.key)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return signed_token, nil
+	session.token.token = signedToken
+	session.token.validUntil = exp
+
+	return nil
+}
+
+func (session *jwtSession) getToken() (string, error) {
+	if !session.token.isValid(session.tokenRefreshBuffer) {
+		return session.token.token, nil
+	}
+	if err := session.refresh(); err != nil {
+		return "", fmt.Errorf("unable to generate token: %w", err)
+	}
+	return session.token.token, nil
 }
 
 type access struct {
@@ -130,15 +177,19 @@ type StartAuthorizationRequest struct {
 	RedirectUrl string `json:"redirect_url"`
 }
 
-func (ebClient EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
-	r := ebClient.httpClient.R().bearerAuthorization(ebClient.jwtToken)
-	r, err := r.jsonBody(data)
+func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
+	token, err := ebClient.jwtSession.getToken()
 	if err != nil {
-		return nil, fmt.Errorf("error creating json body: %v", err)
+		return nil, err
+	}
+	r := ebClient.httpClient.R().bearerAuthorization(token)
+	r, err = r.jsonBody(data)
+	if err != nil {
+		return nil, fmt.Errorf("error creating json body: %w", err)
 	}
 	resp, err := r.post(apiURL + "/auth")
 	if err != nil {
-		return nil, fmt.Errorf("error making requst: %v", err)
+		return nil, fmt.Errorf("error making requst: %w", err)
 	}
 	return resp, nil
 }
