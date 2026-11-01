@@ -6,7 +6,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -68,7 +67,11 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		return privateKey.(*rsa.PrivateKey), nil
+		rsaKey, ok := privateKey.(*rsa.PrivateKey)
+		if !ok {
+			return nil, errors.New("Failed to parse rsa key")
+		}
+		return rsaKey, nil
 	default:
 		return nil, errors.New("unsupported type of private key")
 	}
@@ -126,7 +129,7 @@ func (session *jwtSession) refresh() error {
 }
 
 func (session *jwtSession) getToken() (string, error) {
-	if !session.token.isValid(session.tokenRefreshBuffer) {
+	if session.token.isValid(session.tokenRefreshBuffer) {
 		return session.token.token, nil
 	}
 	if err := session.refresh(); err != nil {
@@ -177,7 +180,36 @@ type StartAuthorizationRequest struct {
 	RedirectUrl string `json:"redirect_url"`
 }
 
-func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*http.Response, error) {
+type StartAuthorizationResponse struct {
+	// URL to redirect PSU to
+	URL string `json:"url"`
+	/*
+		PSU authorisation ID, a value used to identify an authorisation session.
+		Please note that another session ID will used to fetch account data.
+	*/
+	AuthId string `json:"authorization_id"`
+	/*
+		Hashed unique identification of a PSU used by the client application.
+		In case PSU ID is not passed by the client application, the hash is
+		calculated based on a random value. The hash also inherits the application
+		ID, so different hashes will be calculated when using the same PSU ID with
+		different applications.
+	*/
+	PsuIdHash string `json:"psu_id_hash"`
+}
+
+type ErrorResponse struct {
+	// Error message
+	Message string `json:"message"`
+	// Error code, identical to the http response code
+	Code int `json:"code"`
+	// Text error code
+	Error string `json:"error"`
+	// Detailed explanation of an error
+	Detail any `json:"detail"`
+}
+
+func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*StartAuthorizationResponse, error) {
 	token, err := ebClient.jwtSession.getToken()
 	if err != nil {
 		return nil, err
@@ -191,5 +223,21 @@ func (ebClient *EBClient) Authorize(data StartAuthorizationRequest) (*http.Respo
 	if err != nil {
 		return nil, fmt.Errorf("error making requst: %w", err)
 	}
-	return resp, nil
+	if resp.isError() {
+		var errorResponse ErrorResponse
+		err = resp.parseJson(&errorResponse)
+		if err != nil {
+			return nil, fmt.Errorf("failed parsing error body %w", err)
+		}
+		return nil, errors.New(errorResponse.Message)
+	}
+	if resp.isSuccess() {
+		var responseJson StartAuthorizationResponse
+		err = resp.parseJson(&responseJson)
+		if err != nil {
+			return nil, fmt.Errorf("failed parsing json response %w", err)
+		}
+		return &responseJson, nil
+	}
+	return nil, errors.New("Unexpected status " + resp.response.Status)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -43,10 +42,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(body[:]))
+	fmt.Println("Authorize here and provide the code " + response.URL)
 }
